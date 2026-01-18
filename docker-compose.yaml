@@ -1,0 +1,83 @@
+x-no-proxy-env: &no-proxy-env
+  HTTP_PROXY: ""
+  HTTPS_PROXY: ""
+  ALL_PROXY: ""
+  NO_PROXY: ""
+  http_proxy: ""
+  https_proxy: ""
+  all_proxy: ""
+  no_proxy: ""
+
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: arcrank_server
+    restart: unless-stopped
+    depends_on:
+      - mongo
+      - es
+    env_file:
+      - .env.compose
+    environment:
+      <<: *no-proxy-env
+    ports:
+      - "8080:8080"
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+
+
+  mongo:
+    image: docker.io/library/mongo:8.2.2
+    container_name: arcrank_mongo
+    environment:
+#      <<: *no-proxy-env
+      MONGO_INITDB_ROOT_USERNAME: "mongo_root"
+      MONGO_INITDB_ROOT_PASSWORD: "root_secret_pw"
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+      - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro,Z
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+
+  es:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.19.8
+    container_name: arcrank_es
+    restart: always
+    environment:
+      <<: *no-proxy-env
+      discovery.type: "single-node"
+      xpack.security.enabled: "false"
+      xpack.security.http.ssl.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+
+  k6:
+    image: docker.io/grafana/k6:1.4.2
+    container_name: arcrank_k6
+    environment:
+      <<: *no-proxy-env
+    volumes:
+      - ./k6/scripts:/scripts:ro,Z
+      - ./k6/output:/output:rw,Z
+
+volumes:
+  mongo_data:
+  es_data:
